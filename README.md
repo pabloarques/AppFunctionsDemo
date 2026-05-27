@@ -2,7 +2,7 @@
 
 Una aplicación de demostración de alto nivel que implementa la nueva API **Android AppFunctions Jetpack library** (introducida en Android 16 / API 36). El proyecto ilustra cómo los asistentes de Inteligencia Artificial en el dispositivo (como Google Gemini) pueden descubrir, entender y ejecutar la funcionalidad interna de tu aplicación de forma programática y en segundo plano (**headless**).
 
-Esta app presenta un **Dashboard Premium en Tema Oscuro (Obsidian & Neon)** con una consola de desarrollador integrada y un sistema de **sincronización multi-proceso reactiva en tiempo real** mediante Broadcasts privados.
+Esta app presenta un **Dashboard Premium en Tema Oscuro (Obsidian & Neon)** con una consola de desarrollador integrada y un sistema de **sincronización multi-proceso reactiva en tiempo real** mediante **Room Database + Kotlin Flow**.
 
 ---
 
@@ -23,21 +23,32 @@ El código está organizado bajo una arquitectura limpia y modular de paquetes l
 
 ```
 AppFunctionsDemo/
-├── gradle/wrapper/                <-- Gradle 8.9 Wrapper precargado
-├── gradle/libs.versions.toml      <-- Catálogo de versiones centralizado (Kotlin 2.0, Compose, AppFunctions)
-├── gradle.properties              <-- Soporte para AndroidX habilitado
+├── gradle/wrapper/                ← Gradle 8.9 Wrapper precargado
+├── gradle/libs.versions.toml      ← Catálogo de versiones (Kotlin 2.0, Compose, AppFunctions, Room)
+├── gradle.properties              ← Soporte para AndroidX habilitado
 └── app/src/main/
-    ├── AndroidManifest.xml        <-- MainActivity y enlaces semánticos
-    ├── res/xml/app_metadata.xml   <-- Descripción de capacidades del agente
+    ├── AndroidManifest.xml        ← MainActivity y enlaces semánticos
+    ├── res/xml/app_metadata.xml   ← Descripción de capacidades del agente
     └── java/com/example/appfunctionsdemo/
-        ├── MainActivity.kt        <-- Clase de entrada minimalista (¡solo 16 líneas!)
-        ├── model/Note.kt          <-- Estructura de datos anotada con @AppFunctionSerializable
-        ├── data/NoteRepository.kt <-- Repositorio seguro e inmune a concurrencia (CopyOnWriteArrayList)
-        ├── functions/NoteFunctions.kt <-- Métodos asíncronos (suspend) anotados con @AppFunction
+        ├── MainActivity.kt            ← Clase de entrada minimalista (¡solo 16 líneas!)
+        ├── AppFunctionsApplication.kt  ← Inicialización de Koin DI
+        ├── model/
+        │   └── Note.kt                ← @Entity (Room) + @AppFunctionSerializable
+        ├── data/
+        │   ├── NoteDao.kt             ← @Dao con Flow reactivo + operaciones suspend
+        │   ├── AppDatabase.kt         ← RoomDatabase con prepoblación inicial
+        │   └── NoteRepository.kt      ← Wrapper sobre NoteDao que expone Flow<List<Note>>
+        ├── di/
+        │   └── AppModule.kt           ← Módulos Koin (Room, Repository, ViewModel)
+        ├── functions/
+        │   └── NoteFunctions.kt       ← Métodos suspend anotados con @AppFunction
         └── ui/
-            ├── theme/             <-- Paleta de colores Obsidian y Compose AppTheme
-            ├── components/        <-- Widgets reutilizables (Tarjetas, Buscador, Consola ADB)
-            └── screens/           <-- Pantalla principal NoteDashboardScreen con BroadcastReceiver
+            ├── theme/                  ← Paleta de colores Obsidian y Compose AppTheme
+            ├── components/             ← Widgets reutilizables (Tarjetas, Buscador, Consola ADB)
+            ├── viewmodel/
+            │   └── NoteViewModel.kt    ← MVVM reactivo con StateFlow desde Room
+            └── screens/
+                └── NoteDashboardScreen.kt  ← Compose UI stateless con collectAsState()
 ```
 
 ---
@@ -75,17 +86,30 @@ Envía este comando estructurado para ejecutar la función `createNote` pasando 
 adb shell 'cmd app_function execute-app-function --package com.example.appfunctionsdemo --function "com.example.appfunctionsdemo.functions.NoteFunctions#createNote" --parameters "{\"title\":\"Nota desde Android 16\",\"content\":\"Esta nota fue registrada headlessly a traves de AppFunctions en tiempo real!\"}"'
 ```
 
-**¡Mira la pantalla del emulador!** En cuanto presiones *Enter*, el proceso en segundo plano del sistema operativo llamará a tu código Kotlin, el cual enviará un Broadcast privado que la interfaz de Compose capturará, agregando la nueva tarjeta con una animación suave al instante.
+**¡Mira la pantalla del emulador!** En cuanto presiones *Enter*, el proceso del servicio ejecutará tu código Kotlin, que escribirá directamente en la base de datos Room. El `Flow` reactivo del ViewModel detectará el cambio automáticamente y la nueva tarjeta aparecerá en la interfaz Compose con una animación suave al instante.
 
 ### 3. Consultar las notas desde la Terminal
 También puedes simular que el asistente lee los datos del repositorio de la aplicación en segundo plano para responderle al usuario sin abrir la interfaz:
 ```bash
 adb shell 'cmd app_function execute-app-function --package com.example.appfunctionsdemo --function "com.example.appfunctionsdemo.functions.NoteFunctions#getNotes" --parameters "{\"query\":\"\"}"'
 ```
-*Esto te devolverá el listado JSON completo de las notas almacenadas en la persistencia del servicio.*
+*Esto te devolverá el listado JSON completo de las notas almacenadas en la base de datos local.*
 
 ---
 
-## 🛡️ Sincronización Multi-Proceso Segura
+## 🛡️ Sincronización Multi-Proceso con Room + Flow
 
-Dado que las AppFunctions son invocadas de forma aislada por el sistema en un proceso de servicio independiente (`AppFunctionService`) y la pantalla corre en el proceso de la `MainActivity`, implementamos un receptor de difusión privada (`DisposableEffect` con `RECEIVER_NOT_EXPORTED` en Compose) para enviar y recibir actualizaciones de forma privada e instantánea, garantizando la seguridad del sandboxing de Android.
+Las AppFunctions son invocadas de forma aislada por el sistema en un **proceso de servicio independiente** (`AppFunctionService`), mientras que la pantalla corre en el proceso de la `MainActivity`. Estos dos procesos no comparten memoria.
+
+Para resolver esta comunicación inter-proceso (IPC), utilizamos **Room Database como puente reactivo**:
+
+```
+AppFunction (servicio) → Room (SQLite) → Flow → ViewModel → Compose UI
+```
+
+1. La AppFunction escribe directamente en Room a través del `NoteRepository`.
+2. Room invalida automáticamente el `Flow<List<Note>>` que el `NoteDao` expone.
+3. El `NoteViewModel` recoge ese Flow mediante `stateIn()` y lo convierte en `StateFlow`.
+4. La pantalla Compose simplemente observa con `collectAsState()`.
+
+No hay broadcasts manuales, no hay polling, no hay lógica de sincronización explícita. Room se encarga de todo de forma reactiva y cross-process.
