@@ -7,20 +7,20 @@ import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
 /**
- * Módulo de Koin para inyección de dependencias de la aplicación.
- * Registra la base de datos local de Room, el acceso a datos (DAO),
- * el repositorio y el ViewModel de forma limpia y moderna.
+ * Grafo de dependencias de la aplicación gestionado por Koin.
+ *
+ * Define singletons para la capa de datos (Room → DAO → Repository)
+ * y factoría para el ViewModel de la pantalla principal.
  */
 val appModule = module {
-    // Room Database
-    single { AppDatabase.getDatabase(get()) }
-    
-    // DAO
+
+    // Capa de datos: Room
+    single { AppDatabase.build(get()) }
     single { get<AppDatabase>().noteDao() }
-    
-    // Repositorio
+
+    // Capa de dominio
     single { NoteRepository(get()) }
-    
-    // ViewModel
+
+    // Capa de presentación
     viewModelOf(::NoteViewModel)
 }

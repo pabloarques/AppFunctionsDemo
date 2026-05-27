@@ -5,48 +5,48 @@ import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 
 /**
- * Repositorio de producción que envuelve las operaciones de acceso a datos de Room (NoteDao).
- * Permite exponer flujos de datos reactivos (Flow) y realizar escrituras asíncronas seguras.
+ * Repositorio que encapsula el acceso a datos de notas.
+ *
+ * Actúa como única fuente de verdad para la capa de dominio y presentación,
+ * exponiendo un [Flow] reactivo para la UI y operaciones suspend para
+ * las invocaciones headless de AppFunctions.
+ *
+ * @param noteDao DAO de Room inyectado por Koin.
  */
 class NoteRepository(private val noteDao: NoteDao) {
 
     /**
-     * Retorna un Flow reactivo con el listado de todas las notas.
+     * Stream reactivo de todas las notas. Room invalida automáticamente
+     * este Flow ante cualquier escritura, incluso desde otro proceso.
      */
-    val allNotesFlow: Flow<List<Note>> = noteDao.getAllNotesFlow()
+    val allNotes: Flow<List<Note>> = noteDao.observeAll()
 
     /**
-     * Retorna todas las notas de forma directa.
+     * Lectura puntual de todas las notas.
+     * Diseñado para invocaciones headless (AppFunctions) donde
+     * no se necesita una suscripción continua.
      */
-    suspend fun getAllDirect(): List<Note> {
-        return noteDao.getAllNotesDirect()
-    }
+    suspend fun getAll(): List<Note> = noteDao.getAll()
 
     /**
-     * Añade una nota generando un UUID.
+     * Crea y persiste una nueva nota con un identificador único generado.
+     *
+     * @return La nota creada con su ID asignado.
      */
-    suspend fun add(title: String, content: String): Note {
+    suspend fun create(title: String, content: String): Note {
         val note = Note(
             id = UUID.randomUUID().toString(),
             title = title,
             content = content
         )
-        noteDao.insertNote(note)
+        noteDao.insert(note)
         return note
     }
 
     /**
-     * Inserta una nota específica (usada en invocaciones externas/headless).
+     * Elimina una nota por su identificador.
+     *
+     * @return `true` si la nota existía y fue eliminada, `false` si no se encontró.
      */
-    suspend fun addNote(note: Note): Note {
-        noteDao.insertNote(note)
-        return note
-    }
-
-    /**
-     * Elimina una nota por su identificador único.
-     */
-    suspend fun delete(id: String) {
-        noteDao.deleteNoteById(id)
-    }
+    suspend fun delete(id: String): Boolean = noteDao.deleteById(id) > 0
 }

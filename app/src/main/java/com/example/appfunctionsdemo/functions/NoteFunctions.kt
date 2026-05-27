@@ -8,48 +8,56 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 /**
- * Expone las AppFunctions de la aplicación que el sistema operativo y los asistentes
- * de Inteligencia Artificial pueden invocar de manera headless (en segundo plano).
- * 
- * Implementa KoinComponent para resolver de forma limpia y profesional las dependencias
- * (como NoteRepository) gestionadas por el motor de DI.
+ * Punto de entrada headless de la aplicación para agentes de IA.
+ *
+ * Cada método anotado con [@AppFunction] es descubierto e indexado por el sistema operativo
+ * (Android 16+), permitiendo que asistentes como Gemini los invoquen en segundo plano
+ * sin necesidad de abrir la interfaz gráfica.
+ *
+ * El framework instancia esta clase internamente dentro del proceso de servicio
+ * (`AppFunctionService`), por lo que las dependencias se resuelven a través de
+ * [KoinComponent] en lugar de inyección por constructor.
+ *
+ * La descripción semántica de cada función (KDoc) es utilizada directamente por
+ * la IA para decidir cuándo y cómo invocarla (`isDescribedByKDoc = true`).
  */
 class NoteFunctions : KoinComponent {
 
-    private val noteRepository: NoteRepository by inject()
+    private val repository: NoteRepository by inject()
 
     /**
-     * Recupera la lista de notas guardadas en la persistencia local de Room.
-     * Puede filtrar los resultados mediante un término de búsqueda.
+     * Recupera las notas almacenadas en el dispositivo.
+     * Opcionalmente filtra por un término de búsqueda que se compara
+     * contra el título y el contenido de cada nota.
      *
-     * @param appFunctionContext El contexto de ejecución de la AppFunction.
-     * @param query Término de búsqueda opcional para filtrar las notas por título o contenido.
-     * @return Una lista de notas que coinciden con los criterios de búsqueda.
+     * @param appFunctionContext Contexto de ejecución proporcionado por el sistema.
+     * @param query Término de búsqueda opcional. Si es nulo o vacío, devuelve todas las notas.
+     * @return Lista de notas que coinciden con los criterios de búsqueda.
      */
     @AppFunction(isDescribedByKDoc = true)
     suspend fun getNotes(
         appFunctionContext: AppFunctionContext,
         query: String?
     ): List<Note> {
-        val notes = noteRepository.getAllDirect()
-        return if (query.isNullOrBlank()) {
-            notes
-        } else {
-            notes.filter {
-                it.title.contains(query, ignoreCase = true) ||
-                        it.content.contains(query, ignoreCase = true)
-            }
+        val notes = repository.getAll()
+
+        if (query.isNullOrBlank()) return notes
+
+        val normalizedQuery = query.trim()
+        return notes.filter { note ->
+            note.title.contains(normalizedQuery, ignoreCase = true) ||
+                    note.content.contains(normalizedQuery, ignoreCase = true)
         }
     }
 
     /**
-     * Crea y guarda una nueva nota en la base de datos Room de forma directa.
-     * Al persistirse en Room, cualquier Flow activo de la UI Compose se actualizará
-     * de forma reactiva y automática entre los procesos de la app.
+     * Crea una nueva nota y la persiste en la base de datos local.
+     * La UI se actualiza automáticamente de forma reactiva a través de Room Flow,
+     * sin necesidad de comunicación explícita entre procesos.
      *
-     * @param appFunctionContext El contexto de ejecución de la AppFunction.
-     * @param title El título que tendrá la nota creada.
-     * @param content El texto o cuerpo de la nota creada.
+     * @param appFunctionContext Contexto de ejecución proporcionado por el sistema.
+     * @param title Título de la nota.
+     * @param content Cuerpo o contenido de la nota.
      * @return La nota recién creada con su identificador único asignado.
      */
     @AppFunction(isDescribedByKDoc = true)
@@ -57,26 +65,18 @@ class NoteFunctions : KoinComponent {
         appFunctionContext: AppFunctionContext,
         title: String,
         content: String
-    ): Note {
-        return noteRepository.add(title, content)
-    }
+    ): Note = repository.create(title, content)
 
     /**
-     * Elimina una nota existente de la base de datos local a partir de su identificador único.
+     * Elimina una nota existente por su identificador único.
      *
-     * @param appFunctionContext El contexto de ejecución de la AppFunction.
-     * @param id El identificador único de la nota que se desea eliminar.
-     * @return Verdadero si la nota existía y fue eliminada exitosamente, falso en caso contrario.
+     * @param appFunctionContext Contexto de ejecución proporcionado por el sistema.
+     * @param id Identificador único de la nota a eliminar.
+     * @return `true` si la nota existía y fue eliminada, `false` si no se encontró.
      */
     @AppFunction(isDescribedByKDoc = true)
     suspend fun deleteNote(
         appFunctionContext: AppFunctionContext,
         id: String
-    ): Boolean {
-        val exists = noteRepository.getAllDirect().any { it.id == id }
-        if (exists) {
-            noteRepository.delete(id)
-        }
-        return exists
-    }
+    ): Boolean = repository.delete(id)
 }
