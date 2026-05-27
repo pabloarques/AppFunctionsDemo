@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppFunctionAppMetadata
+    xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:description="This app manages personal notes. It can create, retrieve, search, and delete notes."
+    appfn:displayDescription="@string/app_description" />

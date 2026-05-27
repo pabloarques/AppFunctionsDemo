@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AppFunctionsDemo</string>
+    <string name="app_description">Demonstrates Android AppFunctions for on-device AI agent tool orchestration.</string>
+</resources>
