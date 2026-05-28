@@ -21,9 +21,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.painterResource
+import com.example.appfunctionsdemo.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -158,7 +159,7 @@ fun AdbTestingConsole(modifier: Modifier = Modifier) {
                     fontFamily = FontFamily.Monospace
                 )
                 Icon(
-                    imageVector = Icons.Filled.Share,
+                    painter = painterResource(id = R.drawable.ic_content_copy),
                     contentDescription = "Copiar Comando",
                     tint = NeonCyan,
                     modifier = Modifier
