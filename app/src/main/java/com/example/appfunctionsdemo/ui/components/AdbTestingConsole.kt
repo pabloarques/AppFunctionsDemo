@@ -7,14 +7,28 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,7 +48,7 @@ import com.example.appfunctionsdemo.ui.theme.NeonPurple
 enum class AdbCommandTab { LIST, CREATE, SEARCH }
 
 @Composable
-fun AdbTestingConsole() {
+fun AdbTestingConsole(modifier: Modifier = Modifier) {
     var activeTab by remember { mutableStateOf(AdbCommandTab.LIST) }
     val context = LocalContext.current
 
@@ -42,9 +56,11 @@ fun AdbTestingConsole() {
         AdbCommandTab.LIST -> {
             "adb shell cmd app_function list-app-functions | grep com.example.appfunctionsdemo"
         }
+
         AdbCommandTab.CREATE -> {
             "adb shell 'cmd app_function execute-app-function --package com.example.appfunctionsdemo --function \"com.example.appfunctionsdemo.functions.NoteFunctions#createNote\" --parameters \"{\\\"title\\\":\\\"Nota desde ADB\\\",\\\"content\\\":\\\"Esta nota fue registrada headlessly a traves de AppFunctions!\\\"}\"'"
         }
+
         AdbCommandTab.SEARCH -> {
             "adb shell 'cmd app_function execute-app-function --package com.example.appfunctionsdemo --function \"com.example.appfunctionsdemo.functions.NoteFunctions#getNotes\" --parameters \"{\\\"query\\\":\\\"\\\"}\"'"
         }
@@ -64,7 +80,7 @@ fun AdbTestingConsole() {
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF0A0A10))
@@ -149,7 +165,7 @@ fun AdbTestingConsole() {
                         .size(16.dp)
                         .clickable(
                             indication = null,
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                            interactionSource = remember { MutableInteractionSource() }
                         ) { copyToClipboard() }
                 )
             }
@@ -162,7 +178,7 @@ fun AdbTestingConsole() {
                 lineHeight = 16.sp,
                 modifier = Modifier.clickable(
                     indication = null,
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    interactionSource = remember { MutableInteractionSource() }
                 ) { copyToClipboard() }
             )
         }
@@ -177,14 +193,14 @@ fun AdbTestingConsole() {
 }
 
 @Composable
-fun AdbTabButton(label: String, isSelected: Boolean, onClick: () -> Unit) {
+private fun AdbTabButton(label: String, isSelected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
             .background(if (isSelected) NeonPurple else DeepSlate)
             .clickable(
                 indication = null,
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                interactionSource = remember { MutableInteractionSource() }
             ) { onClick() }
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {

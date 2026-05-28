@@ -22,9 +22,13 @@ import com.example.appfunctionsdemo.ui.theme.DeepSlate
 import com.example.appfunctionsdemo.ui.theme.NeonCyan
 
 @Composable
-fun NoteCardComponent(note: Note, onDelete: () -> Unit) {
+fun NoteCardComponent(
+    note: Note,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(DeepSlate)

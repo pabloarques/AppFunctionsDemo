@@ -36,6 +36,8 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 DATABASE_NAME
             )
+                .enableMultiInstanceInvalidation()
+                .fallbackToDestructiveMigration()
                 .addCallback(PrepopulateCallback)
                 .build()
     }

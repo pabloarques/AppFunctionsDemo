@@ -17,7 +17,11 @@ import com.example.appfunctionsdemo.ui.theme.NeonCyan
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchBarComponent(query: String, onQueryChange: (String) -> Unit) {
+fun SearchBarComponent(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
     TextField(
         value = query,
         onValueChange = onQueryChange,
@@ -33,7 +37,7 @@ fun SearchBarComponent(query: String, onQueryChange: (String) -> Unit) {
             unfocusedIndicatorColor = Color.Transparent
         ),
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .border(1.dp, CardBorder, RoundedCornerShape(16.dp))
     )

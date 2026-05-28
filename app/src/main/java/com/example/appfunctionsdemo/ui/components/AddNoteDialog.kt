@@ -19,7 +19,8 @@ import com.example.appfunctionsdemo.ui.theme.ObsidianBg
 @Composable
 fun AddNoteDialog(
     onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit
+    onSave: (String, String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
@@ -85,6 +86,6 @@ fun AddNoteDialog(
         },
         containerColor = DeepSlate,
         shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.border(1.dp, CardBorder, RoundedCornerShape(24.dp))
+        modifier = modifier.border(1.dp, CardBorder, RoundedCornerShape(24.dp))
     )
 }

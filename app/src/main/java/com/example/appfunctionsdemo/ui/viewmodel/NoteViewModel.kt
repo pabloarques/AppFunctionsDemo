@@ -4,77 +4,99 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.appfunctionsdemo.data.NoteRepository
 import com.example.appfunctionsdemo.model.Note
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * ViewModel que gestiona el estado de la pantalla principal (NoteDashboard).
- *
- * Observa reactivamente los cambios en Room a través de [NoteRepository.allNotes]
- * y expone estados derivados (filtrado por búsqueda) como [StateFlow] inmutables
- * para la capa de presentación Compose.
- */
 class NoteViewModel(private val repository: NoteRepository) : ViewModel() {
 
-    /**
-     * Stream reactivo de todas las notas desde Room.
-     * Se actualiza automáticamente ante cualquier escritura, incluso
-     * desde el proceso de servicio de AppFunctions.
-     */
-    val notesList: StateFlow<List<Note>> = repository.allNotes
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = emptyList()
-        )
+    private val _uiState = MutableStateFlow(NoteDashboardUiState())
+    val uiState: StateFlow<NoteDashboardUiState> = _uiState.asStateFlow()
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    private val _sideEffect = Channel<NoteSideEffect>(Channel.BUFFERED)
+    val sideEffect: Flow<NoteSideEffect> = _sideEffect.receiveAsFlow()
 
-    private val _showAddDialog = MutableStateFlow(false)
-    val showAddDialog: StateFlow<Boolean> = _showAddDialog.asStateFlow()
+    init {
+        observeNotes()
+    }
 
-    /**
-     * Lista filtrada que se recalcula automáticamente cuando cambia
-     * el listado en base de datos o la consulta de búsqueda del usuario.
-     */
-    val filteredNotes: StateFlow<List<Note>> = combine(notesList, _searchQuery) { notes, query ->
-        if (query.isBlank()) {
-            notes
-        } else {
-            notes.filter { note ->
-                note.title.contains(query, ignoreCase = true) ||
-                        note.content.contains(query, ignoreCase = true)
+    fun processIntent(intent: NoteIntent) {
+        when (intent) {
+            is NoteIntent.SearchQueryChanged -> onSearchQueryChanged(intent.query)
+            is NoteIntent.ShowAddDialog -> _uiState.update { it.copy(showAddDialog = true) }
+            is NoteIntent.HideAddDialog -> _uiState.update { it.copy(showAddDialog = false) }
+            is NoteIntent.AddNote -> addNote(intent.title, intent.content)
+            is NoteIntent.DeleteNote -> deleteNote(intent.id)
+        }
+    }
+
+    private fun observeNotes() {
+        repository.allNotes
+            .onEach { notes ->
+                _uiState.update { state ->
+                    state.copy(
+                        allNotes = notes,
+                        filteredNotes = filterNotes(notes, state.searchQuery),
+                        isLoading = false
+                    )
+                }
+            }
+            .catch { e ->
+                _uiState.update { it.copy(isLoading = false, error = e.message) }
+            }
+            .launchIn(viewModelScope)
+    }
+
+    private fun onSearchQueryChanged(query: String) {
+        _uiState.update { state ->
+            state.copy(
+                searchQuery = query,
+                filteredNotes = filterNotes(state.allNotes, query)
+            )
+        }
+    }
+
+    private fun addNote(title: String, content: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                repository.create(title, content)
+                _uiState.update { it.copy(showAddDialog = false, isLoading = false) }
+                _sideEffect.send(NoteSideEffect.ShowSnackbar("Nota creada exitosamente"))
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = e.message) }
+                _sideEffect.send(NoteSideEffect.ShowError("Error al crear la nota"))
             }
         }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = emptyList()
-    )
-
-    fun onSearchQueryChange(query: String) {
-        _searchQuery.value = query
     }
 
-    fun setShowAddDialog(show: Boolean) {
-        _showAddDialog.value = show
-    }
-
-    fun addNote(title: String, content: String) {
+    private fun deleteNote(id: String) {
         viewModelScope.launch {
-            repository.create(title, content)
+            try {
+                val deleted = repository.delete(id)
+                if (deleted) {
+                    _sideEffect.send(NoteSideEffect.ShowSnackbar("Nota eliminada"))
+                } else {
+                    _sideEffect.send(NoteSideEffect.ShowError("No se encontró la nota"))
+                }
+            } catch (e: Exception) {
+                _sideEffect.send(NoteSideEffect.ShowError("Error al eliminar la nota"))
+            }
         }
     }
 
-    fun deleteNote(id: String) {
-        viewModelScope.launch {
-            repository.delete(id)
+    private fun filterNotes(notes: List<Note>, query: String): List<Note> =
+        if (query.isBlank()) notes
+        else notes.filter { note ->
+            note.title.contains(query, ignoreCase = true) ||
+                    note.content.contains(query, ignoreCase = true)
         }
-    }
 }
